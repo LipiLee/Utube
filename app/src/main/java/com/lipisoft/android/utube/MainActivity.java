@@ -3,90 +3,87 @@ package com.lipisoft.android.utube;
 import android.app.Activity;
 import android.os.Bundle;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.WindowManager;
+import android.webkit.WebChromeClient;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 
 public class MainActivity extends Activity {
 
-    private VideoEnabledWebView webView;
-    private VideoEnabledWebChromeClient webChromeClient;
+    private TubeWebChromeClient mWebChromeClient = null;
+    private View mCustomView;
+    private WebView mContentView;
+    private FrameLayout mCustomViewContainer;
+    private WebChromeClient.CustomViewCallback mCustomViewCallback;
+    private WebView mWebView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
-
-        // Set layout
         setContentView(R.layout.activity_main);
 
-        // Save the web view
-        webView = (VideoEnabledWebView) findViewById(R.id.webView);
+        mWebView = (WebView) findViewById(R.id.webview);
+        mWebView.loadUrl("http://m.youtube.com");
+        mWebView.setWebViewClient(new WebViewClient());
 
-        // Initialize the VideoEnabledWebChromeClient and set event handlers
-        View nonVideoLayout = findViewById(R.id.nonVideoLayout); // Your own view, read class comments
-        ViewGroup videoLayout = (ViewGroup) findViewById(R.id.videoLayout); // Your own view, read class comments
-        //View loadingView = getLayoutInflater().inflate(R.layout.view_loading_video, null); // Your own view, read class comments
-        webChromeClient = new VideoEnabledWebChromeClient(nonVideoLayout, videoLayout, null, webView) // See all available constructors...
-        {
-            // Subscribe to standard events, such as onProgressChanged()...
-            @Override
-            public void onProgressChanged(WebView view, int progress)
-            {
-                // Your code...
-            }
-        };
-        webChromeClient.setOnToggledFullscreen(new VideoEnabledWebChromeClient.ToggledFullscreenCallback()
-        {
-            @Override
-            public void toggledFullscreen(boolean fullscreen)
-            {
-                // Your code to handle the full-screen change, for example showing and hiding the title bar. Example:
-                if (fullscreen)
-                {
-                    WindowManager.LayoutParams attrs = getWindow().getAttributes();
-                    attrs.flags |= WindowManager.LayoutParams.FLAG_FULLSCREEN;
-                    attrs.flags |= WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
-                    getWindow().setAttributes(attrs);
-                    if (android.os.Build.VERSION.SDK_INT >= 14)
-                    {
-                        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LOW_PROFILE);
-                    }
-                }
-                else
-                {
-                    WindowManager.LayoutParams attrs = getWindow().getAttributes();
-                    attrs.flags &= ~WindowManager.LayoutParams.FLAG_FULLSCREEN;
-                    attrs.flags &= ~WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
-                    getWindow().setAttributes(attrs);
-                    if (android.os.Build.VERSION.SDK_INT >= 14)
-                    {
-                        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
-                    }
-                }
+        mWebView.getSettings().setJavaScriptEnabled(true);
 
-            }
-        });
-        webView.setWebChromeClient(webChromeClient);
-
-        // Navigate everywhere you want, this classes have only been tested on YouTube's mobile site
-        webView.loadUrl("http://m.youtube.com");
+        mWebChromeClient = new TubeWebChromeClient();
+        mWebView.setWebChromeClient(mWebChromeClient);
     }
 
     @Override
-    public void onBackPressed()
-    {
-        // Notify the VideoEnabledWebChromeClient, and handle it ourselves if it doesn't handle it
-        if (!webChromeClient.onBackPressed())
-        {
-            if (webView.canGoBack())
-            {
-                webView.goBack();
+    public void onBackPressed() {
+        if (mCustomViewContainer != null)
+            mWebChromeClient.onHideCustomView();
+        else if (mWebView.canGoBack())
+            mWebView.goBack();
+        else
+            super.onBackPressed();
+    }
+
+    private class TubeWebChromeClient extends WebChromeClient {
+        FrameLayout.LayoutParams LayoutParameters = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+
+        @Override
+        public void onShowCustomView(View view, CustomViewCallback callback) {
+            super.onShowCustomView(view, callback);
+
+            // if a view already exists then immediately terminate the new one
+            if (mCustomView != null) {
+                callback.onCustomViewHidden();
+                return;
             }
-            else
-            {
-                // Close app (presumably)
-                super.onBackPressed();
+            mContentView = (WebView) findViewById(R.id.webview);
+            mContentView.setVisibility(View.GONE);
+            mCustomViewContainer = new FrameLayout(MainActivity.this);
+            mCustomViewContainer.setLayoutParams(LayoutParameters);
+            mCustomViewContainer.setBackgroundResource(android.R.color.black);
+            view.setLayoutParams(LayoutParameters);
+            mCustomViewContainer.addView(view);
+            mCustomView = view;
+            mCustomViewCallback = callback;
+            mCustomViewContainer.setVisibility(View.VISIBLE);
+            setContentView(mCustomViewContainer);
+        }
+
+        @Override
+        public void onHideCustomView() {
+            super.onHideCustomView();
+
+            if (mCustomView != null) {
+                // Hide the custom view.
+                mCustomView.setVisibility(View.GONE);
+                // Remove the custom view from its container.
+                mCustomViewContainer.removeView(mCustomView);
+                mCustomView = null;
+                mCustomViewContainer.setVisibility(View.GONE);
+                mCustomViewCallback.onCustomViewHidden();
+                // Show the content view.
+                mContentView.setVisibility(View.VISIBLE);
+                setContentView(mContentView);
             }
         }
     }
